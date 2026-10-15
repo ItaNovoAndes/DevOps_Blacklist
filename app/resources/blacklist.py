@@ -40,12 +40,11 @@ class BlacklistCollection(Resource):
             db.session.rollback()
             return {"msg": "El email ya está en la lista negra"}, 409
 
-        orig = request.environ.get("werkzeug.proxy_fix.orig", {})
         current_app.logger.info(
             "blacklist add email=%s ip=%s x_forwarded_for=%r",
             entry.email,
             entry.request_ip,
-            orig.get("HTTP_X_FORWARDED_FOR"),
+            request.headers.get("X-Forwarded-For"),
         )
         return {"msg": "Email agregado a la lista negra"}, 201
 

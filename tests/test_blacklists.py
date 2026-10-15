@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from app.extensions import db
@@ -99,9 +100,11 @@ def test_get_not_blacklisted_email(client, auth):
     }
 
 
-def test_ip_comes_from_trusted_proxies(client, auth):
+def test_ip_comes_from_trusted_proxies(client, auth, caplog):
     # Cliente falsifica el primer valor; ALB agrega la IP real y nginx la del ALB.
+    caplog.set_level(logging.INFO)
     headers = {**auth, "X-Forwarded-For": "6.6.6.6, 200.1.2.3, 10.0.0.5"}
     post(client, headers, email="ip@example.com", app_uuid=APP_UUID)
     entry = db.session.execute(db.select(Blacklist)).scalar_one()
     assert entry.request_ip == "200.1.2.3"
+    assert "x_forwarded_for='6.6.6.6, 200.1.2.3, 10.0.0.5'" in caplog.text
