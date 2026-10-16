@@ -60,6 +60,17 @@ flask --app application run
 
 `flask --app application generate-token` imprime un JWT sin expiración firmado con `JWT_SECRET_KEY`. Debe generarse con **el mismo** `JWT_SECRET_KEY` configurado en Beanstalk. El token va al environment de Postman, no al repo.
 
+## Documentación en Postman
+
+En `postman/` están la colección y un environment de ejemplo para importar en Postman:
+
+- [`blacklist-ms.postman_collection.json`](postman/blacklist-ms.postman_collection.json): documenta `GET /ping`, `POST /blacklists` y `GET /blacklists/{email}`, incluyendo autenticación, contratos y ejemplos de respuestas.
+- [`blacklist-ms.postman_environment.json`](postman/blacklist-ms.postman_environment.json): configura la URL desplegada y deja vacío el token.
+
+Importa ambos archivos en Postman. Selecciona el environment **Blacklist MS - Beanstalk** y configura `jwt_token` con un JWT generado con el mismo `JWT_SECRET_KEY` del servicio. Para generarlo, ejecuta `flask --app application generate-token` en un entorno autorizado que tenga ese secreto. No guardes ni compartas el JWT en la colección, el environment exportado o el repositorio.
+
+La variable `email` se comparte entre el alta y la consulta; usa un email distinto para cada alta nueva. Una segunda alta del mismo email devuelve `409`. `GET /ping` no requiere token; los otros dos endpoints requieren `Authorization: Bearer <jwt>`.
+
 ## Crear las tablas (una sola vez)
 
 Las tablas **no** se crean al arrancar. Con la RDS privada, se crean desde una instancia del ambiente (`eb ssh` o Session Manager):
