@@ -85,3 +85,10 @@ git archive -o app.zip HEAD
 ```
 
 - Para medir las estrategias de despliegue, cambiar **solo** el archivo `VERSION` (v2, v3, ...), hacer commit y volver a empaquetar.
+
+## Estrategias de despliegue (Entrega 1)
+
+Runbook completo en [`docs/estrategias-despliegue.md`](docs/estrategias-despliegue.md). Herramientas:
+
+- `scripts/monitor_deploy.py <url> --target v2 --label rolling`: consulta `/ping` varias veces por segundo durante el despliegue y genera un CSV + resumen en Markdown (versiones mezcladas, errores, instancias iniciales o nuevas).
+- `scripts/eb_deploy_times.py --env blacklist-ms-env --region <region> --since <UTC>`: tiempo oficial del despliegue según los eventos de Beanstalk (requiere AWS CLI).
