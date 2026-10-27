@@ -1,0 +1,59 @@
+version: 0.2
+
+# Pipeline de CI: pruebas (pytest) -> imagen Docker -> push a Amazon ECR.
+# No hay etapa de despliegue (sin CD).
+
+env:
+  variables:
+    IMAGE_REPO_NAME: blacklist-ms
+
+phases:
+  # Instala Python 3.12 y las dependencias de desarrollo (incluye pytest).
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - pip install -r requirements-dev.txt
+
+  # Corre las pruebas; si alguna falla, el build se detiene aquí y no se construye ni sube imagen.
+  # Luego calcula la URI del repositorio en ECR y hace login.
+  pre_build:
+    commands:
+      - echo "Iniciando pruebas unitarias con pytest..."
+      - python -m pytest -v --junitxml=reports/junit.xml
+      - AWS_ACCOUNT_ID=$(echo $CODEBUILD_BUILD_ARN | cut -d':' -f5)
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - IMAGE_TAG=build-$CODEBUILD_BUILD_NUMBER
+      - echo "Login en Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+  # Construye la imagen con dos tags: latest y build-<número de build>.
+  build:
+    commands:
+      - echo "Construyendo imagen $REPOSITORY_URI:$IMAGE_TAG"
+      - docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG .
+
+  # Solo si todo lo anterior salió bien: sube la imagen a ECR y genera los archivos de salida.
+  post_build:
+    commands:
+      - '[ "$CODEBUILD_BUILD_SUCCEEDING" = "1" ] || exit 1'
+      - echo "Subiendo imagen a ECR..."
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - printf '{"ImageURI":"%s"}' "$REPOSITORY_URI:$IMAGE_TAG" > imageDetail.json
+      - printf '[{"name":"blacklist-ms","imageUri":"%s"}]' "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
+      - cat imageDetail.json imagedefinitions.json
+
+# Reporte de pruebas visible en la consola de CodeBuild (pestaña Reports).
+reports:
+  pytest-reports:
+    files:
+      - junit.xml
+    base-directory: reports
+    file-format: JUNITXML
+
+# Archivos de salida del build (referencia a la imagen subida).
+artifacts:
+  files:
+    - imageDetail.json
+    - imagedefinitions.json
