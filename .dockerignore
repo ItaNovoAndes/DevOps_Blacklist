@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+**/*.pyc
+.pytest_cache
+tests/
+reports/
+postman/
+.ebextensions/
+.elasticbeanstalk/
+.DS_Store
+**/.DS_Store
+*.zip
+*.md
+buildspec.yml

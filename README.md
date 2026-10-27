@@ -103,3 +103,52 @@ Runbook completo en [`docs/estrategias-despliegue.md`](docs/estrategias-desplieg
 
 - `scripts/monitor_deploy.py <url> --target v2 --label rolling`: consulta `/ping` varias veces por segundo durante el despliegue y genera un CSV + resumen en Markdown (versiones mezcladas, errores, instancias iniciales o nuevas).
 - `scripts/eb_deploy_times.py --env blacklist-ms-env --region <region> --since <UTC>`: tiempo oficial del despliegue según los eventos de Beanstalk (requiere AWS CLI).
+
+## Integración continua (Entrega 2)
+
+Cada merge (push) a `main` dispara un pipeline de CI que prueba el código, construye la imagen Docker y la sube a Amazon ECR (repositorio `blacklist-ms`, región `us-east-2`):
+
+```text
+GitHub (main) ──► AWS CodePipeline ──► AWS CodeBuild (buildspec.yml)
+                                          │
+                                          ├─ 1. pytest            (si falla, el build se detiene)
+                                          ├─ 2. docker build      (tags: latest y build-<n>)
+                                          └─ 3. docker push ──► Amazon ECR: blacklist-ms
+```
+
+**No hay etapa de despliegue (sin CD):** el pipeline termina cuando la imagen queda en ECR.
+
+### Fases del `buildspec.yml`
+
+| Fase | Qué hace |
+|---|---|
+| `install` | Usa Python 3.12 e instala `requirements-dev.txt` (incluye pytest). |
+| `pre_build` | Corre `pytest` y genera `reports/junit.xml`. Si una prueba falla, el build se detiene y **no** se construye ni sube imagen. Luego calcula la URI del repositorio ECR a partir del ARN del build, define el tag `build-<número de build>` y hace login en ECR. |
+| `build` | `docker build` con dos tags: `latest` y `build-<n>`. |
+| `post_build` | Verifica que el build siga en éxito, hace `docker push` de ambos tags y genera `imageDetail.json` e `imagedefinitions.json` con la URI de la imagen. |
+| `reports` | Publica `junit.xml` en el grupo de reportes `pytest-reports` (pestaña *Reports* de CodeBuild). |
+| `artifacts` | Exporta `imageDetail.json` e `imagedefinitions.json`. |
+
+### Probar en local
+
+Pruebas (igual que en CodeBuild):
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -v --junitxml=reports/junit.xml
+```
+
+Imagen Docker (sin AWS). `DATABASE_URL` y `JWT_SECRET_KEY` no van dentro de la imagen; se pasan al ejecutar el contenedor:
+
+```bash
+docker build -t blacklist-ms:local .
+docker run --rm -d -p 5001:5000 \
+  -e DATABASE_URL=sqlite:////tmp/local.db \
+  -e 'JWT_SECRET_KEY=local-secret-with-at-least-32-bytes!!' \
+  --name bl-local blacklist-ms:local
+curl http://localhost:5001/ping   # {"status": "ok", "version": "v5", ...}
+docker stop bl-local
+```
+
+La imagen usa `python:3.12-slim` desde ECR Public (evita el límite de descargas de Docker Hub en CodeBuild), instala solo dependencias de producción, corre con un usuario no root y arranca con gunicorn en el puerto 5000.
