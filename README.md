@@ -118,6 +118,8 @@ GitHub (main) ──► AWS CodePipeline ──► AWS CodeBuild (buildspec.yml)
 
 **No hay etapa de despliegue (sin CD):** el pipeline termina cuando la imagen queda en ECR.
 
+**Disparo:** el pipeline se ejecuta automáticamente con cada merge (push) a `main`; los push a otras ramas no lo disparan.
+
 ### Fases del `buildspec.yml`
 
 | Fase | Qué hace |
