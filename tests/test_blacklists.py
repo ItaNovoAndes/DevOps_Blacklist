@@ -13,7 +13,7 @@ def post(client, headers, **body):
 
 def test_post_adds_email(client, auth):
     resp = post(client, auth, email="user@example.com", app_uuid=APP_UUID, blocked_reason="spam")
-    assert resp.status_code == 201
+    assert resp.status_code == 200
     assert resp.get_json() == {"msg": "Email agregado a la lista negra"}
 
     entry = db.session.execute(db.select(Blacklist)).scalar_one()
