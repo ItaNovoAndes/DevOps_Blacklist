@@ -20,6 +20,7 @@ phases:
   pre_build:
     commands:
       - echo "Iniciando pruebas unitarias con pytest..."
+      - echo "Cambio intencional para mostrar en video Entrega 2"
       - python -m pytest -v --junitxml=reports/junit.xml
       - AWS_ACCOUNT_ID=$(echo $CODEBUILD_BUILD_ARN | cut -d':' -f5)
       - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
