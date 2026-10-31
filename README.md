@@ -154,4 +154,3 @@ docker stop bl-local
 ```
 
 La imagen usa `python:3.12-slim` desde ECR Public (evita el límite de descargas de Docker Hub en CodeBuild), instala solo dependencias de producción, corre con un usuario no root y arranca con gunicorn en el puerto 5000.
-
