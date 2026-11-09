@@ -1,7 +1,7 @@
 version: 0.2
 
-# Pipeline de CI: pruebas (pytest) -> imagen Docker -> push a Amazon ECR.
-# No hay etapa de despliegue (sin CD).
+# CI: pytest -> Docker image -> push to Amazon ECR.
+# CD: the artifacts feed the CodeDeploy (ECS blue/green) stage of the pipeline.
 
 env:
   variables:
@@ -20,7 +20,6 @@ phases:
   pre_build:
     commands:
       - echo "Iniciando pruebas unitarias con pytest..."
-      - echo "Cambio intencional para mostrar en video Entrega 2"
       - python -m pytest -v --junitxml=reports/junit.xml
       - AWS_ACCOUNT_ID=$(echo $CODEBUILD_BUILD_ARN | cut -d':' -f5)
       - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
@@ -58,3 +57,5 @@ artifacts:
   files:
     - imageDetail.json
     - imagedefinitions.json
+    - appspec.yaml
+    - taskdef.json
