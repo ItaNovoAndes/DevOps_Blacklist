@@ -1,7 +1,7 @@
 version: 0.2
 
-# CI: pytest -> Docker image -> push to Amazon ECR.
-# CD: the artifacts feed the CodeDeploy (ECS blue/green) stage of the pipeline.
+# Pipeline de CI: pruebas (pytest) -> imagen Docker -> push a Amazon ECR.
+# Los artefactos alimentan la etapa de CD con CodeDeploy (blue/green en ECS).
 
 env:
   variables:
@@ -52,7 +52,7 @@ reports:
     base-directory: reports
     file-format: JUNITXML
 
-# Archivos de salida del build (referencia a la imagen subida).
+# Archivos de salida del build: referencia a la imagen subida y archivos de despliegue para CodeDeploy.
 artifacts:
   files:
     - imageDetail.json
