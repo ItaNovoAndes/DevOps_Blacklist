@@ -20,6 +20,6 @@ RUN useradd --create-home --uid 1000 appuser
 USER appuser
 
 # DATABASE_URL y JWT_SECRET_KEY NO van en la imagen: se pasan al ejecutar el contenedor.
-EXPOSE 5000
+EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "application:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "application:application"]
