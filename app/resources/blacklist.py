@@ -52,6 +52,7 @@ class BlacklistCollection(Resource):
 class BlacklistItem(Resource):
     @jwt_required()
     def get(self, email):
+        email = normalize_email(email)
         entry = db.session.execute(
             db.select(Blacklist).filter_by(email=email)
         ).scalar_one_or_none()
