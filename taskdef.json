@@ -18,9 +18,9 @@
             "essential": true,
             "portMappings": [
                 {
-                    "name": "blacklist-ms-8000-tcp",
-                    "containerPort": 8000,
-                    "hostPort": 8000,
+                    "name": "blacklist-ms-5000-tcp",
+                    "containerPort": 5000,
+                    "hostPort": 5000,
                     "protocol": "tcp",
                     "appProtocol": "http"
                 }
