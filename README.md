@@ -1,6 +1,6 @@
 # blacklist-ms
 
-Microservicio Flask que gestiona la lista negra global de emails. Se despliega a mano en AWS Elastic Beanstalk con PostgreSQL en RDS.
+Microservicio Flask que gestiona la lista negra global de emails. Corre en contenedores sobre Amazon ECS (AWS Fargate) detrás de un Application Load Balancer, con PostgreSQL en RDS, y se despliega automáticamente con AWS CodePipeline + AWS CodeDeploy (blue/green). Las entregas 1 y 2 usaban AWS Elastic Beanstalk.
 
 ## Endpoints
 
@@ -33,7 +33,7 @@ Cuerpo del POST:
 |---|---|
 | `DATABASE_URL` | `postgresql://usuario:clave@host:5432/blacklistdb` |
 | `JWT_SECRET_KEY` | Secreto con que se firma el token (mínimo 32 caracteres). Nunca se sube al repo |
-| `PROXY_FIX_X_FOR` | Opcional. Proxies de confianza delante de gunicorn. Por defecto `2` (ALB + nginx de Beanstalk) |
+| `PROXY_FIX_X_FOR` | Opcional. Proxies de confianza delante de gunicorn. Por defecto `2` (ALB + nginx de Beanstalk); en Fargate es `1` (solo el ALB) |
 
 La versión que reporta `/ping` sale **solo** del archivo `VERSION`.
 
@@ -116,7 +116,7 @@ GitHub (main) ──► AWS CodePipeline ──► AWS CodeBuild (buildspec.yml)
                                           └─ 3. docker push ──► Amazon ECR: blacklist-ms
 ```
 
-**No hay etapa de despliegue (sin CD):** el pipeline termina cuando la imagen queda en ECR.
+En la Entrega 2 no había etapa de despliegue: el pipeline terminaba cuando la imagen quedaba en ECR. La Entrega 3 le agregó la etapa de despliegue continuo (ver abajo).
 
 **Disparo:** el pipeline se ejecuta automáticamente con cada merge (push) a `main`; los push a otras ramas no lo disparan.
 
@@ -129,7 +129,7 @@ GitHub (main) ──► AWS CodePipeline ──► AWS CodeBuild (buildspec.yml)
 | `build` | `docker build` con dos tags: `latest` y `build-<n>`. |
 | `post_build` | Verifica que el build siga en éxito, hace `docker push` de ambos tags y genera `imageDetail.json` e `imagedefinitions.json` con la URI de la imagen. |
 | `reports` | Publica `junit.xml` en el grupo de reportes `pytest-reports` (pestaña *Reports* de CodeBuild). |
-| `artifacts` | Exporta `imageDetail.json` e `imagedefinitions.json`. |
+| `artifacts` | Exporta `imageDetail.json` e `imagedefinitions.json`, y además `appspec.yaml` y `taskdef.json` para la etapa de despliegue (Entrega 3). |
 
 ### Probar en local
 
@@ -154,3 +154,44 @@ docker stop bl-local
 ```
 
 La imagen usa `python:3.12-slim` desde ECR Public (evita el límite de descargas de Docker Hub en CodeBuild), instala solo dependencias de producción, corre con un usuario no root y arranca con gunicorn en el puerto 5000.
+
+## Entrega continua (Entrega 3)
+
+El mismo pipeline (`blacklist-ms-pipeline`) agrega una etapa **Deploy** que, después de un build exitoso, despliega la nueva imagen en AWS Fargate con AWS CodeDeploy (blue/green):
+
+```text
+GitHub (main) ──► CodePipeline ──► CodeBuild ──────────────► CodeDeploy (ECS blue/green)
+                                    ├─ pytest                  ├─ registra una revisión de la task definition (taskdef.json)
+                                    ├─ docker build / push     ├─ levanta el task set nuevo (green) en blacklist-ms-tg-green
+                                    └─ artefactos:             ├─ mueve el listener :80 del ALB de blue a green
+                                       imageDetail.json        └─ termina el task set anterior a los 5 minutos
+                                       appspec.yaml
+                                       taskdef.json
+```
+
+Si las pruebas fallan, el build se detiene y no se despliega nada. Si el despliegue falla, CodeDeploy hace rollback y el tráfico sigue en la versión anterior.
+
+### Infraestructura (us-east-2)
+
+| Recurso | Nombre |
+|---|---|
+| Cluster ECS (Fargate) | `blacklist-ms-cluster` |
+| Servicio ECS (controlador `CODE_DEPLOY`) | `blacklist-ms-service` |
+| Task definition | `blacklist-ms-task` (contenedor `blacklist-ms`, puerto 5000, 0.25 vCPU / 0.5 GB) |
+| Application Load Balancer | `blacklist-ms-alb` (listener :80 producción, :8080 prueba) |
+| Target groups | `blacklist-ms-tg-blue`, `blacklist-ms-tg-green` (tipo IP, health check `/ping`) |
+| CodeDeploy | aplicación `blacklist-ms-codedeploy`, deployment group `blacklist-ms-dg` |
+| Logs | CloudWatch `/ecs/blacklist-ms` |
+
+### Archivos de despliegue
+
+| Archivo | Qué hace |
+|---|---|
+| `taskdef.json` | Plantilla de la task definition. CodePipeline reemplaza `<IMAGE1_NAME>` por la imagen de `imageDetail.json` y registra una revisión nueva. |
+| `appspec.yaml` | Le indica a CodeDeploy qué contenedor y puerto (`blacklist-ms:5000`) conectar al ALB. `<TASK_DEFINITION>` lo reemplaza CodePipeline. |
+
+`DATABASE_URL` y `JWT_SECRET_KEY` no están en el repositorio: la task definition los toma de AWS Systems Manager Parameter Store (`/blacklist-ms/DATABASE_URL` y `/blacklist-ms/JWT_SECRET_KEY`, tipo SecureString).
+
+### Probar con Postman
+
+Importa `postman/blacklist-ms-fargate.postman_environment.json` (environment **Blacklist MS - Fargate**). `base_url` apunta al DNS del ALB; configura `jwt_token` igual que en el environment de Beanstalk.
