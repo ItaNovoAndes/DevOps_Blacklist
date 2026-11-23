@@ -19,7 +19,17 @@ COPY application.py VERSION ./
 RUN useradd --create-home --uid 1000 appuser
 USER appuser
 
-# DATABASE_URL y JWT_SECRET_KEY NO van en la imagen: se pasan al ejecutar el contenedor.
+# Configuración no sensible del agente de New Relic (APM).
+# NEW_RELIC_LICENSE_KEY NO va en la imagen: en Fargate se inyecta desde
+# Parameter Store (/blacklist-ms/NEW_RELIC_LICENSE_KEY) y en local con `docker run -e`.
+ENV NEW_RELIC_APP_NAME="blacklist-ms" \
+    NEW_RELIC_LOG=stdout \
+    NEW_RELIC_LOG_LEVEL=info \
+    NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+
+# DATABASE_URL, JWT_SECRET_KEY y NEW_RELIC_LICENSE_KEY NO van en la imagen: se pasan al ejecutar el contenedor.
 EXPOSE 5000
 
+# newrelic-admin envuelve a gunicorn para instrumentar Flask y psycopg2 automáticamente.
+ENTRYPOINT ["newrelic-admin", "run-program"]
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "application:application"]

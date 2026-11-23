@@ -195,3 +195,40 @@ Si las pruebas fallan, el build se detiene y no se despliega nada. Si el desplie
 ### Probar con Postman
 
 Importa `postman/blacklist-ms-fargate.postman_environment.json` (environment **Blacklist MS - Fargate**). `base_url` apunta al DNS del ALB; configura `jwt_token` igual que en el environment de Beanstalk.
+
+## Monitoreo continuo (Entrega 4)
+
+El microservicio está instrumentado con el agente APM de **New Relic** para Python. El agente instrumenta automáticamente Flask, gunicorn y psycopg2 (tiempos de respuesta del servicio y de la base de datos, Apdex, errores y trazas distribuidas) sin cambios en el código de la aplicación.
+
+| Archivo | Cambio |
+|---|---|
+| `requirements.txt` | Agrega `newrelic`. |
+| `Dockerfile` | Variables no sensibles del agente (`NEW_RELIC_APP_NAME=blacklist-ms`, `NEW_RELIC_LOG=stdout`, `NEW_RELIC_LOG_LEVEL=info`, `NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true`) y `ENTRYPOINT ["newrelic-admin", "run-program"]`, que envuelve a gunicorn. |
+| `taskdef.json` | Inyecta `NEW_RELIC_LICENSE_KEY` desde Parameter Store (`/blacklist-ms/NEW_RELIC_LICENSE_KEY`, SecureString). |
+| `scripts/stress_test.py` | Prueba de estrés contra el ALB (tráfico exitoso y errores 400/401/409). |
+
+La License Key **no** está en el repositorio ni en la imagen. El rol `blacklist-ms-ecs-task-execution-role` ya puede leerla porque su política permite `ssm:GetParameters` sobre `parameter/blacklist-ms/*`.
+
+### Probar en local (eventos de desarrollo)
+
+```bash
+docker build -t blacklist-ms:local .
+docker run --rm -d -p 5001:5000 \
+  -e DATABASE_URL=sqlite:////tmp/local.db \
+  -e 'JWT_SECRET_KEY=local-secret-with-at-least-32-bytes!!' \
+  -e NEW_RELIC_LICENSE_KEY="$NEW_RELIC_LICENSE_KEY" \
+  -e NEW_RELIC_APP_NAME=blacklist-ms-local \
+  --name bl-local blacklist-ms:local
+curl http://localhost:5001/ping
+docker logs bl-local | grep -i "new relic"   # debe indicar que el agente se conectó
+```
+
+`NEW_RELIC_APP_NAME=blacklist-ms-local` separa los eventos de desarrollo de los de la nube (`blacklist-ms`) en New Relic.
+
+### Prueba de estrés en la nube
+
+```bash
+export BASE_URL=http://blacklist-ms-alb-1459916110.us-east-2.elb.amazonaws.com
+export JWT_TOKEN=<token estático>
+python3 scripts/stress_test.py --duration 300 --workers 20
+```
