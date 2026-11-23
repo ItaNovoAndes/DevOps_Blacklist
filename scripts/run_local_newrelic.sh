@@ -22,6 +22,20 @@ if [ -z "${NEW_RELIC_LICENSE_KEY:-}" ]; then
 fi
 [ -n "$NEW_RELIC_LICENSE_KEY" ] || { echo "Falta la License Key"; exit 1; }
 
+# Limpia espacios/saltos de línea pegados por error y valida la llave contra New Relic.
+NEW_RELIC_LICENSE_KEY=$(printf '%s' "$NEW_RELIC_LICENSE_KEY" | tr -d '[:space:]')
+echo "==> Llave recibida: ${#NEW_RELIC_LICENSE_KEY} caracteres, termina en ...${NEW_RELIC_LICENSE_KEY: -4}"
+case "$NEW_RELIC_LICENSE_KEY" in eu*) NR_LOG_API=https://log-api.eu.newrelic.com/log/v1 ;; *) NR_LOG_API=https://log-api.newrelic.com/log/v1 ;; esac
+NR_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$NR_LOG_API" \
+  -H "Api-Key: $NEW_RELIC_LICENSE_KEY" -H 'Content-Type: application/json' \
+  -d '[{"message":"blacklist-ms: verificacion de license key"}]' || true)
+if [ "$NR_STATUS" != "202" ]; then
+  echo "New Relic rechazó la llave (HTTP $NR_STATUS). Debe ser la INGEST - LICENSE (40 caracteres, termina en NRAL)."
+  echo "En API Keys usa '...' -> 'Copy key' (no 'Copy key ID')."
+  exit 1
+fi
+echo "==> New Relic aceptó la llave."
+
 echo "==> Construyendo la imagen $IMAGE..."
 docker build -t "$IMAGE" .
 
