@@ -39,6 +39,10 @@
                 {
                     "name": "JWT_SECRET_KEY",
                     "valueFrom": "arn:aws:ssm:us-east-2:626771561849:parameter/blacklist-ms/JWT_SECRET_KEY"
+                },
+                {
+                    "name": "NEW_RELIC_LICENSE_KEY",
+                    "valueFrom": "arn:aws:ssm:us-east-2:626771561849:parameter/blacklist-ms/NEW_RELIC_LICENSE_KEY"
                 }
             ],
             "logConfiguration": {

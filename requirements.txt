@@ -10,3 +10,4 @@ Flask-JWT-Extended==4.7.4
 PyJWT==2.15.1
 psycopg2-binary==2.9.13
 gunicorn==26.2.0
+newrelic==14.3.0
